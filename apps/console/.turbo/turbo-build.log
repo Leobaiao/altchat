@@ -1,0 +1,13 @@
+
+> @altchat/console@1.0.0 build
+> tsc && vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 1637 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m  0.32 kB[22m[1m[22m[2m │ gzip:   0.23 kB[22m
+[2mdist/[22m[35massets/index-C-keMyKq.css  [39m[1m[2m  4.21 kB[22m[1m[22m[2m │ gzip:   1.37 kB[22m
+[2mdist/[22m[36massets/index-CqYfO5jK.js   [39m[1m[2m401.21 kB[22m[1m[22m[2m │ gzip: 133.25 kB[22m
+[32m✓ built in 3.29s[39m

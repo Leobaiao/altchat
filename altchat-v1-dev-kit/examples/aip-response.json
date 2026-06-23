@@ -1,0 +1,23 @@
+{
+  "sessionId": "sess_demo",
+  "commands": [
+    {
+      "action": "show_message",
+      "text": "Olá! Bem-vindo ao AltChat."
+    },
+    {
+      "action": "show_buttons",
+      "text": "Como posso ajudar?",
+      "buttons": [
+        {
+          "label": "Abrir chamado",
+          "value": "open_ticket"
+        },
+        {
+          "label": "Consultar chamado",
+          "value": "check_ticket"
+        }
+      ]
+    }
+  ]
+}
