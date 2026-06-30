@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Builds and production outputs
+dist/
+build/
+.next/
+out/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime and cache
+.turbo/
+.cache/
+.npm/
+.eslintcache
+
+# Database / SQLite
+*.db
+*.db-journal
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
