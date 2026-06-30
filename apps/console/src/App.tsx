@@ -2,13 +2,14 @@ import { useState } from "react";
 import { ServerConsole } from "./components/ServerConsole";
 import { Dashboard } from "./components/Dashboard";
 import { Integration } from "./components/Integration";
+import { FlowEditor } from "./components/FlowEditor";
 import { Login } from "./components/Login";
 import { useAuth } from "./contexts/AuthContext";
-import { MessageSquare, Server, LayoutDashboard, LogOut, Code } from "lucide-react";
+import { MessageSquare, Server, LayoutDashboard, LogOut, Code, GitBranch } from "lucide-react";
 import "@altchat/client";
 
 export function App() {
-  const [tab, setTab] = useState<"dashboard" | "integration" | "client" | "console">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "flows" | "integration" | "client" | "console">("dashboard");
   const { user, isLoading, logout } = useAuth();
 
   if (isLoading) {
@@ -40,6 +41,11 @@ export function App() {
           Integração
         </button>
 
+        <button className={tab === "flows" ? "active" : ""} onClick={() => setTab("flows")}>
+          <GitBranch size={18} />
+          Fluxos
+        </button>
+
         <button className={tab === "client" ? "active" : ""} onClick={() => setTab("client")}>
           <MessageSquare size={18} />
           Client Demo
@@ -64,6 +70,7 @@ export function App() {
 
       <main className="content">
         {tab === "dashboard" && <Dashboard />}
+        {tab === "flows" && <FlowEditor />}
         {tab === "integration" && <Integration />}
         {tab === "client" && (
           <div className="page">

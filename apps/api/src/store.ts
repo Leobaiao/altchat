@@ -241,3 +241,36 @@ export async function createUser(tenantId: string, email: string, passwordHash: 
     }
   });
 }
+
+// --- Flows ---
+export async function getFlowByClientId(clientId: string) {
+  return prisma.flow.findUnique({
+    where: { clientId }
+  });
+}
+
+export async function upsertFlow(tenantId: string, clientId: string, nodesJson: any, edgesJson: any, name?: string) {
+  return prisma.flow.upsert({
+    where: { clientId },
+    update: {
+      nodesJson,
+      edgesJson,
+      ...(name ? { name } : {})
+    },
+    create: {
+      tenantId,
+      clientId,
+      nodesJson,
+      edgesJson,
+      name: name || "Fluxo Principal"
+    }
+  });
+}
+
+export async function listClients(tenantId?: string) {
+  return prisma.client.findMany({
+    where: tenantId ? { tenantId, status: "active" } : { status: "active" },
+    orderBy: { createdAt: "desc" }
+  });
+}
+

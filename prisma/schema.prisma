@@ -30,6 +30,7 @@ model Tenant {
   auditLogs AuditLog[]
   configs   ClientConfig[]
   users     User[]
+  flows     Flow[]
 }
 
 model Client {
@@ -46,6 +47,7 @@ model Client {
   configs  ClientConfig[]
   events   Event[]
   commands Command[]
+  flows    Flow[]
 
   @@index([tenantId])
 }
@@ -162,6 +164,23 @@ model User {
   updatedAt    DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Flow {
+  id        String   @id @default(uuid())
+  tenantId  String
+  clientId  String   @unique
+  name      String   @default("Fluxo Principal")
+  nodesJson Json
+  edgesJson Json
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }

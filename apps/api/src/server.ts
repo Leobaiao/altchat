@@ -4,10 +4,11 @@ import cors from "cors";
 import helmet from "helmet";
 import { z } from "zod";
 import { handleEvent, startCommands } from "./flowEngine.js";
+import { startDynamicFlow, handleDynamicEvent } from "./dynamicFlowEngine.js";
 import {
   createApiKey, findSession, createSession, listSessions, createEvent,
   listEvents, createCommand, getClientConfig, listAuditLogs, getStats,
-  listApiKeys, resetData, updateSessionState
+  listApiKeys, resetData, updateSessionState, getFlowByClientId
 } from "./store.js";
 import { AltChatEvent } from "./protocol.js";
 import { validateApiKey, AuthenticatedRequest } from "./middleware/auth.js";
@@ -16,6 +17,7 @@ import { filterByTenant } from "./middleware/tenantFilter.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { auditLog } from "./middleware/auditLog.js";
 import authRoutes from "./routes/authRoutes.js";
+import flowRoutes from "./routes/flowRoutes.js";
 
 const app = express();
 
@@ -92,8 +94,18 @@ app.post("/api/sessions",
         data: (session.contextJson as any) || {}
       };
 
-      // Run flow engine
-      const commands = startCommands(sessionDataForFlow);
+      // Try dynamic flow first, fallback to hardcoded
+      const flowRecord = await getFlowByClientId(data.clientId);
+      let commands;
+      if (flowRecord && flowRecord.isActive) {
+        const flowData = {
+          nodes: flowRecord.nodesJson as any[],
+          edges: flowRecord.edgesJson as any[]
+        };
+        commands = startDynamicFlow(sessionDataForFlow, flowData);
+      } else {
+        commands = startCommands(sessionDataForFlow);
+      }
 
       // Save commands & update session
       await createCommand(session.tenantId, session.clientId, session.id, commands);
@@ -146,8 +158,18 @@ app.post("/api/events",
         data: (session.contextJson as any) || {}
       };
 
-      // Run flow engine
-      const commands = handleEvent(sessionDataForFlow, event);
+      // Try dynamic flow first, fallback to hardcoded
+      const flowRecord = await getFlowByClientId(session.clientId);
+      let commands;
+      if (flowRecord && flowRecord.isActive && sessionDataForFlow.state.startsWith("flow:")) {
+        const flowData = {
+          nodes: flowRecord.nodesJson as any[],
+          edges: flowRecord.edgesJson as any[]
+        };
+        commands = handleDynamicEvent(sessionDataForFlow, event, flowData);
+      } else {
+        commands = handleEvent(sessionDataForFlow, event);
+      }
 
       // Save commands & update session
       await createCommand(session.tenantId, session.clientId, session.id, commands);
@@ -270,6 +292,9 @@ app.post("/api/admin/reset",
     res.json({ ok: true });
   }
 );
+
+// Flow routes
+app.use("/api/admin/flows", flowRoutes);
 
 app.listen(PORT, () => {
   console.log(`AltChat backend running on http://localhost:${PORT}`);
