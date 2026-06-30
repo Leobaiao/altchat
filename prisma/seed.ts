@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -119,6 +120,21 @@ async function main() {
     }
   });
   console.log(`  ✅ API Key: ${apiKey.name} (plain: ${DEMO_API_KEY})`);
+
+  // 5. Upsert Admin User
+  const adminEmail = "admin@altchat.io";
+  const passwordHash = await bcrypt.hash("123456", 10);
+  const adminUser = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: { passwordHash },
+    create: {
+      tenantId: tenant.id,
+      email: adminEmail,
+      passwordHash,
+      role: "ADMIN"
+    }
+  });
+  console.log(`  ✅ Admin User: ${adminUser.email} (role: ${adminUser.role})`);
 
   console.log("\n🎉 Seed completed successfully!");
   console.log(`\n📋 Quick Reference:`);

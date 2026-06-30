@@ -1,9 +1,8 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
-import { API_BASE, API_KEY } from "../config";
+import { API_BASE } from "../config";
 import { Users, CheckCircle, Activity, Key } from "lucide-react";
-
-const authHeaders = { "X-AltChat-Api-Key": API_KEY };
+import { useAuth } from "../contexts/AuthContext";
 
 type StatsData = {
   openSessions: number;
@@ -16,10 +15,13 @@ type StatsData = {
 export function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { token } = useAuth();
 
   async function loadStats() {
     try {
-      const res = await axios.get(`${API_BASE}/api/admin/stats`, { headers: authHeaders });
+      const res = await axios.get(`${API_BASE}/api/admin/stats`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
       setStats(res.data);
     } catch (e) {
       console.warn("Failed to load stats:", e);

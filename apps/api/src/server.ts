@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { z } from "zod";
@@ -11,9 +11,11 @@ import {
 } from "./store.js";
 import { AltChatEvent } from "./protocol.js";
 import { validateApiKey, AuthenticatedRequest } from "./middleware/auth.js";
+import { requireJwtAuth } from "./middleware/jwtAuth.js";
 import { filterByTenant } from "./middleware/tenantFilter.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { auditLog } from "./middleware/auditLog.js";
+import authRoutes from "./routes/authRoutes.js";
 
 const app = express();
 
@@ -27,6 +29,8 @@ app.use(express.json({ limit: "5mb" }));
 // ==========================================
 // PUBLIC ROUTES (no auth required)
 // ==========================================
+
+app.use("/api/auth", authRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -162,32 +166,32 @@ app.post("/api/events",
 );
 
 // ==========================================
-// ADMIN ROUTES (API Key required)
+// ADMIN ROUTES (JWT required)
 // ==========================================
 
 app.get("/api/admin/sessions",
-  validateApiKey, rateLimit,
+  requireJwtAuth, rateLimit,
   async (_req, res) => {
     res.json(await listSessions());
   }
 );
 
 app.get("/api/admin/events",
-  validateApiKey, rateLimit,
+  requireJwtAuth, rateLimit,
   async (_req, res) => {
     res.json(await listEvents());
   }
 );
 
 app.get("/api/admin/stats",
-  validateApiKey, rateLimit,
+  requireJwtAuth, rateLimit,
   async (_req, res) => {
     res.json(await getStats());
   }
 );
 
 app.get("/api/admin/flow",
-  validateApiKey, rateLimit,
+  requireJwtAuth, rateLimit,
   (_req, res) => {
     res.json({
       name: "Demo AltChat Flow",
@@ -205,15 +209,15 @@ app.get("/api/admin/flow",
 );
 
 app.get("/api/admin/audit",
-  validateApiKey, rateLimit,
+  requireJwtAuth, rateLimit,
   async (_req, res) => {
     res.json(await listAuditLogs());
   }
 );
 
 app.get("/api/admin/apikeys",
-  validateApiKey, rateLimit,
-  async (_req: AuthenticatedRequest, res) => {
+  requireJwtAuth, rateLimit,
+  async (_req, res) => {
     const keys = await listApiKeys();
     // Return keys without exposing hashes
     const safeKeys = keys.map(k => ({
@@ -230,16 +234,17 @@ app.get("/api/admin/apikeys",
 );
 
 app.post("/api/admin/apikeys",
-  validateApiKey, rateLimit,
+  requireJwtAuth, rateLimit,
   auditLog("create_api_key", "api_key"),
-  async (req: AuthenticatedRequest, res) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const schema = z.object({
         name: z.string().min(1).max(100)
       });
 
       const data = schema.parse(req.body);
-      const tenantId = req.tenant!.id;
+      const userPayload = (req as any).user;
+      const tenantId = userPayload.tenantId; // Use tenant from JWT
       const { record, plainKey } = await createApiKey(tenantId, data.name);
 
       res.status(201).json({
@@ -258,7 +263,7 @@ app.post("/api/admin/apikeys",
 );
 
 app.post("/api/admin/reset",
-  validateApiKey, rateLimit,
+  requireJwtAuth, rateLimit,
   auditLog("reset_data", "system"),
   async (_req, res) => {
     await resetData();

@@ -1,11 +1,23 @@
 import { useState } from "react";
 import { ServerConsole } from "./components/ServerConsole";
 import { Dashboard } from "./components/Dashboard";
-import { MessageSquare, Server, LayoutDashboard } from "lucide-react";
+import { Integration } from "./components/Integration";
+import { Login } from "./components/Login";
+import { useAuth } from "./contexts/AuthContext";
+import { MessageSquare, Server, LayoutDashboard, LogOut, Code } from "lucide-react";
 import "@altchat/client";
 
 export function App() {
-  const [tab, setTab] = useState<"dashboard" | "client" | "console">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "integration" | "client" | "console">("dashboard");
+  const { user, isLoading, logout } = useAuth();
+
+  if (isLoading) {
+    return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>Carregando...</div>;
+  }
+
+  if (!user) {
+    return <Login />;
+  }
 
   return (
     <div className="app">
@@ -23,6 +35,11 @@ export function App() {
           Dashboard
         </button>
 
+        <button className={tab === "integration" ? "active" : ""} onClick={() => setTab("integration")}>
+          <Code size={18} />
+          Integração
+        </button>
+
         <button className={tab === "client" ? "active" : ""} onClick={() => setTab("client")}>
           <MessageSquare size={18} />
           Client Demo
@@ -32,10 +49,22 @@ export function App() {
           <Server size={18} />
           Server Debug
         </button>
+
+        <div style={{ flex: 1 }}></div>
+
+        <div style={{ padding: "1rem", borderTop: "1px solid #374151", color: "#9ca3af", fontSize: "12px", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div>Logado como: <strong>{user.email}</strong></div>
+          <div>Role: <strong>{user.role}</strong></div>
+          <button onClick={logout} style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: "0.5rem 0" }}>
+            <LogOut size={16} />
+            Sair
+          </button>
+        </div>
       </aside>
 
       <main className="content">
         {tab === "dashboard" && <Dashboard />}
+        {tab === "integration" && <Integration />}
         {tab === "client" && (
           <div className="page">
             <header className="page-header">

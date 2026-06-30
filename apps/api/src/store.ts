@@ -215,3 +215,29 @@ export async function resetData() {
   await prisma.auditLog.deleteMany();
   await prisma.session.deleteMany();
 }
+
+// --- Users ---
+export async function findUserByEmail(email: string) {
+  return prisma.user.findUnique({
+    where: { email },
+    include: { tenant: true }
+  });
+}
+
+export async function findUserById(id: string) {
+  return prisma.user.findUnique({
+    where: { id },
+    include: { tenant: true }
+  });
+}
+
+export async function createUser(tenantId: string, email: string, passwordHash: string, role: "ADMIN" | "OPERATOR" | "VIEWER" = "VIEWER") {
+  return prisma.user.create({
+    data: {
+      tenantId,
+      email,
+      passwordHash,
+      role
+    }
+  });
+}

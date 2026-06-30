@@ -1,8 +1,7 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
-import { API_BASE, API_KEY } from "../config";
-
-const authHeaders = { "X-AltChat-Api-Key": API_KEY };
+import { API_BASE } from "../config";
+import { useAuth } from "../contexts/AuthContext";
 
 export function ServerConsole() {
   const [sessions, setSessions] = useState<unknown[]>([]);
@@ -11,6 +10,8 @@ export function ServerConsole() {
   const [health, setHealth] = useState<unknown>(null);
   const [auditLogs, setAuditLogs] = useState<unknown[]>([]);
   const [apiKeys, setApiKeys] = useState<unknown[]>([]);
+  const { token } = useAuth();
+  const authHeaders = { Authorization: `Bearer ${token}` };
 
   async function load() {
     try {
