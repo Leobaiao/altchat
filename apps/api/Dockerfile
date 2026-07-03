@@ -30,6 +30,7 @@ COPY --from=builder /app/prisma ./prisma
 
 # Copy startup script
 COPY apps/api/start.sh /app/start.sh
+RUN sed -i 's/\r$//' /app/start.sh
 RUN chmod +x /app/start.sh
 
 EXPOSE 4300

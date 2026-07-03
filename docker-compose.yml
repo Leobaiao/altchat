@@ -50,6 +50,8 @@ services:
     build:
       context: .
       dockerfile: apps/console/Dockerfile
+      args:
+        - VITE_API_BASE=${VITE_API_BASE:-http://localhost:4300}
     container_name: altchat-console
     ports:
       - "8080:80"

@@ -12,7 +12,8 @@ COPY . .
 RUN npm install
 
 # Inject environment variables during build if necessary (Vite embeds them)
-ENV VITE_API_BASE=http://localhost:4300
+ARG VITE_API_BASE=http://localhost:4300
+ENV VITE_API_BASE=$VITE_API_BASE
 
 # Build console
 RUN turbo run build --filter=@altchat/console
