@@ -60,6 +60,16 @@ export async function listApiKeys(tenantId?: string) {
   });
 }
 
+export async function revokeApiKey(id: string) {
+  return prisma.apiKey.update({
+    where: { id },
+    data: {
+      status: "revoked",
+      revokedAt: new Date()
+    }
+  });
+}
+
 // --- Sessions ---
 export async function createSession(tenantId: string, clientId: string, externalUserId?: string) {
   return prisma.session.create({
@@ -243,26 +253,142 @@ export async function createUser(tenantId: string, email: string, passwordHash: 
 }
 
 // --- Flows ---
-export async function getFlowByClientId(clientId: string) {
-  return prisma.flow.findUnique({
-    where: { clientId }
+
+/** Get the default published flow for a client (used at runtime) */
+export async function getDefaultFlowByClientId(clientId: string) {
+  return prisma.flow.findFirst({
+    where: { clientId, isDefault: true, status: "PUBLISHED" }
   });
 }
 
-export async function upsertFlow(tenantId: string, clientId: string, nodesJson: any, edgesJson: any, name?: string) {
-  return prisma.flow.upsert({
+/** Legacy alias — used by server.ts session creation */
+export async function getFlowByClientId(clientId: string) {
+  return getDefaultFlowByClientId(clientId);
+}
+
+/** List all flows for a client */
+export async function listFlowsByClientId(clientId: string) {
+  return prisma.flow.findMany({
     where: { clientId },
-    update: {
-      nodesJson,
-      edgesJson,
-      ...(name ? { name } : {})
-    },
-    create: {
+    orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }]
+  });
+}
+
+/** Get a single flow by ID */
+export async function getFlowById(flowId: string) {
+  return prisma.flow.findUnique({ where: { id: flowId } });
+}
+
+/** Create a new flow (starts as DRAFT) */
+export async function createFlow(tenantId: string, clientId: string, name: string) {
+  return prisma.flow.create({
+    data: {
+      tenantId,
+      clientId,
+      name,
+      status: "DRAFT",
+      isDefault: false,
+      nodesJson: [],
+      edgesJson: []
+    }
+  });
+}
+
+/** Update a flow's nodes, edges and/or name */
+export async function updateFlow(flowId: string, data: { nodesJson?: any; edgesJson?: any; name?: string }) {
+  return prisma.flow.update({
+    where: { id: flowId },
+    data: {
+      ...(data.nodesJson !== undefined ? { nodesJson: data.nodesJson } : {}),
+      ...(data.edgesJson !== undefined ? { edgesJson: data.edgesJson } : {}),
+      ...(data.name !== undefined ? { name: data.name } : {})
+    }
+  });
+}
+
+/** Delete a flow (will fail if it's the default) */
+export async function deleteFlow(flowId: string) {
+  const flow = await prisma.flow.findUnique({ where: { id: flowId } });
+  if (!flow) throw new Error("Flow not found");
+  if (flow.isDefault) throw new Error("Cannot delete the default flow. Set another flow as default first.");
+  return prisma.flow.delete({ where: { id: flowId } });
+}
+
+/** Publish a flow (change status from DRAFT to PUBLISHED) */
+export async function publishFlow(flowId: string) {
+  return prisma.flow.update({
+    where: { id: flowId },
+    data: { status: "PUBLISHED" }
+  });
+}
+
+/** Archive a flow */
+export async function archiveFlow(flowId: string) {
+  const flow = await prisma.flow.findUnique({ where: { id: flowId } });
+  if (!flow) throw new Error("Flow not found");
+  if (flow.isDefault) throw new Error("Cannot archive the default flow. Set another flow as default first.");
+  return prisma.flow.update({
+    where: { id: flowId },
+    data: { status: "ARCHIVED", isDefault: false }
+  });
+}
+
+/** Set a flow as the default for its client (must be PUBLISHED) */
+export async function setDefaultFlow(clientId: string, flowId: string) {
+  const flow = await prisma.flow.findUnique({ where: { id: flowId } });
+  if (!flow) throw new Error("Flow not found");
+  if (flow.status !== "PUBLISHED") throw new Error("Only published flows can be set as default.");
+
+  // Remove default from all other flows of this client
+  await prisma.flow.updateMany({
+    where: { clientId, isDefault: true },
+    data: { isDefault: false }
+  });
+
+  // Set this flow as default
+  return prisma.flow.update({
+    where: { id: flowId },
+    data: { isDefault: true }
+  });
+}
+
+/** Duplicate a flow as a new DRAFT */
+export async function duplicateFlow(flowId: string, newName: string) {
+  const original = await prisma.flow.findUnique({ where: { id: flowId } });
+  if (!original) throw new Error("Flow not found");
+
+  return prisma.flow.create({
+    data: {
+      tenantId: original.tenantId,
+      clientId: original.clientId,
+      name: newName,
+      status: "DRAFT",
+      isDefault: false,
+      nodesJson: original.nodesJson as any,
+      edgesJson: original.edgesJson as any
+    }
+  });
+}
+
+// --- Legacy upsert (kept for backward compatibility) ---
+export async function upsertFlow(tenantId: string, clientId: string, nodesJson: any, edgesJson: any, name?: string) {
+  // Find existing default flow or create one
+  const existing = await prisma.flow.findFirst({ where: { clientId, isDefault: true } });
+  if (existing) {
+    return prisma.flow.update({
+      where: { id: existing.id },
+      data: { nodesJson, edgesJson, ...(name ? { name } : {}) }
+    });
+  }
+  return prisma.flow.create({
+    data: {
       tenantId,
       clientId,
       nodesJson,
       edgesJson,
-      name: name || "Fluxo Principal"
+      name: name || "Fluxo Principal",
+      status: "PUBLISHED",
+      isDefault: true
     }
   });
 }

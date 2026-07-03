@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "AltChat Injector (Zero-Code)",
+  "version": "1.0.0",
+  "description": "Inject the AltChat widget into any website easily for internal teams or B2B clients.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}

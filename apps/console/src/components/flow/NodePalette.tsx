@@ -22,11 +22,7 @@ export function NodePalette({ onAddNode }: NodePaletteProps) {
 
   return (
     <div style={{
-      width: 220,
-      backgroundColor: "#fff",
-      borderRight: "1px solid #e5e7eb",
-      padding: "1rem",
-      overflowY: "auto",
+      flex: 1,
     }}>
       <h3 style={{ margin: "0 0 0.75rem 0", fontSize: 14, color: "#374151" }}>Blocos</h3>
       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 1rem 0" }}>Arraste para o canvas ou clique para adicionar</p>

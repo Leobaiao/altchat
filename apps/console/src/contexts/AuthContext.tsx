@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, AuthContextType } from "../types";
+import { API_BASE } from "../config";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -21,7 +22,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUser = async () => {
     try {
-      const res = await fetch("http://localhost:4300/api/auth/me", {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {

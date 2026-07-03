@@ -18,8 +18,20 @@ import "@xyflow/react/dist/style.css";
 import { customNodeTypes } from "./flow/CustomNodes";
 import { NodePalette } from "./flow/NodePalette";
 import { NodeEditorPanel } from "./flow/NodeEditorPanel";
+import { FlowList } from "./flow/FlowList";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE } from "../config";
+
+interface FlowItem {
+  id: string;
+  name: string;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  isDefault: boolean;
+  nodesJson: any;
+  edgesJson: any;
+  updatedAt: string;
+  createdAt: string;
+}
 
 const defaultStartNode: Node = {
   id: "start-1",
@@ -38,10 +50,15 @@ function FlowEditorInner() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [flowName, setFlowName] = useState("Fluxo Principal");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Multi-flow state
+  const [flows, setFlows] = useState<FlowItem[]>([]);
+  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
+  const [selectedFlowName, setSelectedFlowName] = useState<string>("Novo Fluxo");
+  const [selectedFlowStatus, setSelectedFlowStatus] = useState<string>("DRAFT");
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -56,26 +73,153 @@ function FlowEditorInner() {
       .catch(console.error);
   }, []);
 
-  // Load flow for selected client
-  useEffect(() => {
+  // Load flows for selected client
+  const loadFlows = useCallback(async () => {
     if (!selectedClientId) return;
-    setLoading(true);
-    fetch(`${API_BASE}/api/admin/flows/${selectedClientId}`, { headers })
-      .then(r => r.json())
-      .then(data => {
-        if (data.nodes && data.nodes.length > 0) {
-          setNodes(data.nodes);
-          setEdges(data.edges || []);
-          setFlowName(data.name || "Fluxo Principal");
-        } else {
-          setNodes([defaultStartNode]);
-          setEdges([]);
-          setFlowName("Fluxo Principal");
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}`, { headers });
+      const data = await res.json();
+      const flowList: FlowItem[] = Array.isArray(data) ? data : [];
+      setFlows(flowList);
+
+      // Auto-select the first flow if none selected or current selection is gone
+      if (flowList.length > 0) {
+        const currentStillExists = selectedFlowId && flowList.some(f => f.id === selectedFlowId);
+        if (!currentStillExists) {
+          loadFlowIntoCanvas(flowList[0]);
         }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      } else {
+        setSelectedFlowId(null);
+        setSelectedFlowName("Novo Fluxo");
+        setSelectedFlowStatus("DRAFT");
+        setNodes([defaultStartNode]);
+        setEdges([]);
+      }
+    } catch (err) {
+      console.error("Error loading flows:", err);
+    }
+  }, [selectedClientId, selectedFlowId]);
+
+  useEffect(() => {
+    if (selectedClientId) {
+      setSelectedFlowId(null);
+      loadFlows();
+    }
   }, [selectedClientId]);
+
+  const loadFlowIntoCanvas = (flow: FlowItem) => {
+    setSelectedFlowId(flow.id);
+    setSelectedFlowName(flow.name);
+    setSelectedFlowStatus(flow.status);
+    const flowNodes = Array.isArray(flow.nodesJson) ? flow.nodesJson : [];
+    const flowEdges = Array.isArray(flow.edgesJson) ? flow.edgesJson : [];
+    if (flowNodes.length > 0) {
+      setNodes(flowNodes);
+      setEdges(flowEdges);
+    } else {
+      setNodes([defaultStartNode]);
+      setEdges([]);
+    }
+  };
+
+  const handleSelectFlow = (flowId: string) => {
+    const flow = flows.find(f => f.id === flowId);
+    if (flow) loadFlowIntoCanvas(flow);
+  };
+
+  // --- Flow CRUD handlers ---
+
+  const handleCreateFlow = async () => {
+    if (!selectedClientId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}`, {
+        method: "POST", headers,
+        body: JSON.stringify({ name: "Novo Fluxo" })
+      });
+      if (res.ok) {
+        const newFlow = await res.json();
+        await loadFlows();
+        loadFlowIntoCanvas(newFlow);
+      }
+    } catch (err) { console.error("Error creating flow:", err); }
+  };
+
+  const handleRenameFlow = async (flowId: string, newName: string) => {
+    try {
+      await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}/${flowId}`, {
+        method: "PUT", headers,
+        body: JSON.stringify({ name: newName })
+      });
+      if (flowId === selectedFlowId) setSelectedFlowName(newName);
+      await loadFlows();
+    } catch (err) { console.error("Error renaming flow:", err); }
+  };
+
+  const handleDuplicateFlow = async (flowId: string) => {
+    const original = flows.find(f => f.id === flowId);
+    try {
+      await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}/${flowId}/duplicate`, {
+        method: "POST", headers,
+        body: JSON.stringify({ name: `${original?.name || "Fluxo"} (Cópia)` })
+      });
+      await loadFlows();
+    } catch (err) { console.error("Error duplicating flow:", err); }
+  };
+
+  const handlePublishFlow = async (flowId: string) => {
+    try {
+      await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}/${flowId}/publish`, {
+        method: "POST", headers
+      });
+      if (flowId === selectedFlowId) setSelectedFlowStatus("PUBLISHED");
+      await loadFlows();
+    } catch (err) { console.error("Error publishing flow:", err); }
+  };
+
+  const handleArchiveFlow = async (flowId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}/${flowId}/archive`, {
+        method: "POST", headers
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Erro ao arquivar");
+        return;
+      }
+      await loadFlows();
+    } catch (err) { console.error("Error archiving flow:", err); }
+  };
+
+  const handleSetDefaultFlow = async (flowId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}/${flowId}/default`, {
+        method: "POST", headers
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Erro ao definir padrão");
+        return;
+      }
+      await loadFlows();
+    } catch (err) { console.error("Error setting default:", err); }
+  };
+
+  const handleDeleteFlow = async (flowId: string) => {
+    if (!confirm("Tem certeza que deseja excluir este fluxo?")) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}/${flowId}`, {
+        method: "DELETE", headers
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Erro ao excluir");
+        return;
+      }
+      await loadFlows();
+    } catch (err) { console.error("Error deleting flow:", err); }
+  };
+
+  // --- Canvas interaction handlers ---
 
   const onConnect = useCallback((params: Connection) => {
     setEdges((eds) => addEdge(params, eds));
@@ -149,17 +293,18 @@ function FlowEditorInner() {
   }, [screenToFlowPosition]);
 
   const saveFlow = async () => {
-    if (!selectedClientId) return;
+    if (!selectedClientId || !selectedFlowId) return;
     setSaving(true);
     setSaveMessage("");
     try {
-      const res = await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}`, {
+      const res = await fetch(`${API_BASE}/api/admin/flows/${selectedClientId}/${selectedFlowId}`, {
         method: "PUT",
         headers,
-        body: JSON.stringify({ nodes, edges, name: flowName }),
+        body: JSON.stringify({ nodes, edges, name: selectedFlowName }),
       });
       if (res.ok) {
         setSaveMessage("✅ Fluxo salvo com sucesso!");
+        await loadFlows();
       } else {
         const err = await res.json();
         setSaveMessage(`❌ Erro: ${err.error}`);
@@ -171,6 +316,15 @@ function FlowEditorInner() {
       setTimeout(() => setSaveMessage(""), 4000);
     }
   };
+
+  // Status badge for toolbar
+  const statusColors: Record<string, { bg: string; color: string; label: string }> = {
+    DRAFT: { bg: "#fef3c7", color: "#92400e", label: "🟡 Rascunho" },
+    PUBLISHED: { bg: "#d1fae5", color: "#065f46", label: "🟢 Publicado" },
+    ARCHIVED: { bg: "#f3f4f6", color: "#6b7280", label: "⚫ Arquivado" },
+  };
+
+  const currentStatus = statusColors[selectedFlowStatus] || statusColors.DRAFT;
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 56px)", flexDirection: "column" }}>
@@ -189,20 +343,28 @@ function FlowEditorInner() {
           ))}
         </select>
 
-        <input
-          value={flowName}
-          onChange={(e) => setFlowName(e.target.value)}
-          style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, width: 200 }}
-          placeholder="Nome do fluxo"
-        />
+        {selectedFlowId && (
+          <>
+            <span style={{ fontSize: 13, color: "#6b7280" }}>▸</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{selectedFlowName}</span>
+            <span style={{
+              fontSize: 10, padding: "2px 8px", borderRadius: 4,
+              backgroundColor: currentStatus.bg, color: currentStatus.color, fontWeight: 600,
+            }}>
+              {currentStatus.label}
+            </span>
+          </>
+        )}
+
+        <div style={{ flex: 1 }} />
 
         <button
           onClick={saveFlow}
-          disabled={saving || !selectedClientId}
+          disabled={saving || !selectedClientId || !selectedFlowId}
           style={{
             padding: "6px 16px", borderRadius: 6, border: "none",
-            background: "#2563eb", color: "#fff", fontWeight: 600,
-            cursor: saving ? "not-allowed" : "pointer", fontSize: 13,
+            background: !selectedFlowId ? "#9ca3af" : "#2563eb", color: "#fff", fontWeight: 600,
+            cursor: (saving || !selectedFlowId) ? "not-allowed" : "pointer", fontSize: 13,
           }}
         >
           {saving ? "Salvando..." : "💾 Salvar Fluxo"}
@@ -217,12 +379,40 @@ function FlowEditorInner() {
 
       {/* Editor Area */}
       <div style={{ display: "flex", flex: 1 }}>
-        <NodePalette onAddNode={addNodeToCanvas} />
+        {/* Left sidebar: FlowList + NodePalette */}
+        <div style={{
+          width: 220,
+          backgroundColor: "#fff",
+          borderRight: "1px solid #e5e7eb",
+          padding: "1rem",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+        }}>
+          <FlowList
+            flows={flows}
+            selectedFlowId={selectedFlowId}
+            onSelectFlow={handleSelectFlow}
+            onCreateFlow={handleCreateFlow}
+            onRenameFlow={handleRenameFlow}
+            onDuplicateFlow={handleDuplicateFlow}
+            onPublishFlow={handlePublishFlow}
+            onArchiveFlow={handleArchiveFlow}
+            onSetDefaultFlow={handleSetDefaultFlow}
+            onDeleteFlow={handleDeleteFlow}
+          />
+          <NodePalette onAddNode={addNodeToCanvas} />
+        </div>
 
         <div ref={reactFlowWrapper} style={{ flex: 1 }}>
           {loading ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#6b7280" }}>
               Carregando fluxo...
+            </div>
+          ) : !selectedFlowId ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#9ca3af", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 32 }}>📋</span>
+              <span style={{ fontSize: 14 }}>Selecione ou crie um fluxo na barra lateral</span>
             </div>
           ) : (
             <ReactFlow

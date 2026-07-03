@@ -5,21 +5,22 @@ export function Integration() {
   const { user } = useAuth();
   const [apiKey, setApiKey] = useState("");
   const [clientId, setClientId] = useState("client_default");
-  const [activeTab, setActiveTab] = useState<"html" | "react" | "wordpress">("html");
+  const [activeTab, setActiveTab] = useState<"html" | "react" | "wordpress" | "extension">("html");
 
   const tenantId = user?.tenantId || "SEU_TENANT_ID";
   const displayApiKey = apiKey.trim() || "SUA_API_KEY";
   const displayClientId = clientId.trim() || "SEU_CLIENT_ID";
 
-  const htmlSnippet = `<!-- 1. Importe o script do AltChat -->
-<script src="https://cdn.altchat.io/v1/altchat.js"></script>
-
-<!-- 2. Adicione o Web Component onde desejar que o chat seja ancorado -->
-<altchat-widget 
-  tenant-id="${tenantId}" 
-  client-id="${displayClientId}" 
-  api-key="${displayApiKey}"
-></altchat-widget>`;
+  const htmlSnippet = `<!-- 1. Copie e cole este script na tag <head> do seu site -->
+<!-- O AltChat será injetado automaticamente! -->
+<script 
+  src="http://localhost:5173/altchat.js" 
+  data-auto-inject="true"
+  data-tenant-id="${tenantId}" 
+  data-client-id="${displayClientId}" 
+  data-api-key="${displayApiKey}"
+  defer
+></script>`;
 
   const reactSnippet = `// 1. Instale o pacote oficial do protocolo:
 // npm install @altchat/client
@@ -76,6 +77,21 @@ export function App() {
 
 4. Salve as alterações. O Widget carregará automaticamente no site.`;
 
+  const extensionSnippet = `<!-- Extensão de Navegador B2B/B2C (Zero-Code) -->
+
+Você pode usar o AltChat em qualquer site de terceiros sem alterar nenhuma linha de código.
+Ideal para CRMs, portais corporativos, ou ferramentas SaaS fechadas.
+
+1. Baixe a pasta "apps/extension" do nosso repositório.
+2. Acesse a URL: chrome://extensions no seu navegador baseado em Chromium.
+3. Ative o "Modo do Desenvolvedor" no canto superior direito.
+4. Clique em "Carregar sem compactação" (Load unpacked) e selecione a pasta da extensão.
+5. Clique no ícone da extensão no navegador e preencha suas credenciais:
+   - Tenant ID: ${tenantId}
+   - Client ID: ${displayClientId}
+   - API Key: ${displayApiKey}
+6. Ative a chave. O AltChat aparecerá magicamente no site que você estiver navegando!`;
+
   return (
     <div className="page">
       <header className="page-header">
@@ -131,6 +147,12 @@ export function App() {
         >
           WordPress
         </button>
+        <button 
+          onClick={() => setActiveTab("extension")}
+          style={{ padding: "0.5rem 1rem", border: "none", backgroundColor: activeTab === "extension" ? "#2563eb" : "#e5e7eb", color: activeTab === "extension" ? "#fff" : "#374151", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
+        >
+          Extensão (Zero-Code)
+        </button>
       </div>
 
       <div style={{ backgroundColor: "#1e1e1e", color: "#d4d4d4", padding: "1rem", borderRadius: "8px", overflowX: "auto" }}>
@@ -138,6 +160,7 @@ export function App() {
           {activeTab === "html" && htmlSnippet}
           {activeTab === "react" && reactSnippet}
           {activeTab === "wordpress" && wordpressSnippet}
+          {activeTab === "extension" && extensionSnippet}
         </pre>
       </div>
     </div>

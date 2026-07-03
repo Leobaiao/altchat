@@ -45,3 +45,23 @@ class AltChatWidget extends HTMLElement {
 if (!customElements.get('altchat-widget')) {
   customElements.define('altchat-widget', AltChatWidget);
 }
+
+// Auto-injection logic for Zero-Code integration
+const currentScript = document.currentScript;
+if (currentScript && currentScript.hasAttribute('data-auto-inject')) {
+  if (!document.querySelector('altchat-widget')) {
+    const widget = document.createElement('altchat-widget');
+    
+    const tenantId = currentScript.getAttribute('data-tenant-id');
+    const clientId = currentScript.getAttribute('data-client-id');
+    const apiKey = currentScript.getAttribute('data-api-key');
+    const endpoint = currentScript.getAttribute('data-endpoint');
+    
+    if (tenantId) widget.setAttribute('tenant-id', tenantId);
+    if (clientId) widget.setAttribute('client-id', clientId);
+    if (apiKey) widget.setAttribute('api-key', apiKey);
+    if (endpoint) widget.setAttribute('endpoint', endpoint);
+    
+    document.body.appendChild(widget);
+  }
+}

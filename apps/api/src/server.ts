@@ -8,7 +8,7 @@ import { startDynamicFlow, handleDynamicEvent } from "./dynamicFlowEngine.js";
 import {
   createApiKey, findSession, createSession, listSessions, createEvent,
   listEvents, createCommand, getClientConfig, listAuditLogs, getStats,
-  listApiKeys, resetData, updateSessionState, getFlowByClientId
+  listApiKeys, resetData, updateSessionState, getFlowByClientId, revokeApiKey
 } from "./store.js";
 import { AltChatEvent } from "./protocol.js";
 import { validateApiKey, AuthenticatedRequest } from "./middleware/auth.js";
@@ -24,7 +24,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 4300);
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors({ origin: FRONTEND_ORIGIN }));
 app.use(express.json({ limit: "5mb" }));
 
@@ -97,7 +97,7 @@ app.post("/api/sessions",
       // Try dynamic flow first, fallback to hardcoded
       const flowRecord = await getFlowByClientId(data.clientId);
       let commands;
-      if (flowRecord && flowRecord.isActive) {
+      if (flowRecord) {
         const flowData = {
           nodes: flowRecord.nodesJson as any[],
           edges: flowRecord.edgesJson as any[]
@@ -161,7 +161,7 @@ app.post("/api/events",
       // Try dynamic flow first, fallback to hardcoded
       const flowRecord = await getFlowByClientId(session.clientId);
       let commands;
-      if (flowRecord && flowRecord.isActive && sessionDataForFlow.state.startsWith("flow:")) {
+      if (flowRecord && sessionDataForFlow.state.startsWith("flow:")) {
         const flowData = {
           nodes: flowRecord.nodesJson as any[],
           edges: flowRecord.edgesJson as any[]
@@ -277,6 +277,82 @@ app.post("/api/admin/apikeys",
         createdAt: record.createdAt,
         key: plainKey // Only returned once at creation time
       });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+app.post("/api/admin/apikeys/:id/revoke",
+  requireJwtAuth, rateLimit,
+  auditLog("revoke_api_key", "api_key"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updated = await revokeApiKey(id);
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+app.post("/api/admin/sessions/:id/test-event",
+  requireJwtAuth, rateLimit,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const schema = z.object({
+        type: z.enum([
+          "session.started",
+          "user.message",
+          "user.input",
+          "button.clicked",
+          "option.selected",
+          "form.submitted",
+          "file.uploaded",
+          "session.closed"
+        ]),
+        payload: z.record(z.unknown()).optional()
+      });
+      const eventData = schema.parse(req.body);
+      const session = await findSession(id);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      // Record event in DB
+      await createEvent(session.tenantId, session.clientId, session.id, eventData.type, eventData.payload || {});
+
+      // Prepare state for flow engine
+      const sessionDataForFlow = {
+        ...session,
+        state: session.state as any,
+        data: (session.contextJson as any) || {}
+      };
+
+      // Try dynamic flow first, fallback to hardcoded
+      const flowRecord = await getFlowByClientId(session.clientId);
+      let commands;
+      if (flowRecord && sessionDataForFlow.state.startsWith("flow:")) {
+        const flowData = {
+          nodes: flowRecord.nodesJson as any[],
+          edges: flowRecord.edgesJson as any[]
+        };
+        commands = handleDynamicEvent(sessionDataForFlow, eventData as any, flowData);
+      } else {
+        commands = handleEvent(sessionDataForFlow, eventData as any);
+      }
+
+      if (commands) {
+        await createCommand(session.tenantId, session.clientId, session.id, commands);
+        const updatedSession = await updateSessionState(session.id, sessionDataForFlow.state, sessionDataForFlow.data);
+        res.json({ session: updatedSession, commands });
+      } else {
+        res.json({ session, commands: [] });
+      }
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Internal Server Error" });
